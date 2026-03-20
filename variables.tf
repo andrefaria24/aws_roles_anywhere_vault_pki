@@ -1,19 +1,30 @@
-variable "hub_account_id" {
+variable "address" {
+  type = string
+}
+variable "token" {
   type = string
 }
 
-variable "hub_role_name" {
+variable "team1_dev_account_id" {
   type = string
-  # examples: "ra-hub-team1-dev", "ra-hub-team1-prod", or "ra-hub-team2-dev"
 }
 
-variable "spoke_role_name" {
+variable "team1_prod_account_id" {
   type = string
-  # examples: "ra-spoke-team1-dev"
 }
 
-# optional: if you want distinct permissions per env/team
-variable "permissions_mode" {
-  type    = string
-  default = "readonly" # readonly | admin
+variable "team2_dev_account_id" {
+  type = string
+}
+
+variable "team1_dev_spoke_role_name" {
+  type = string
+}
+
+variable "team1_prod_spoke_role_name" {
+  type = string
+}
+
+variable "team2_dev_spoke_role_name" {
+  type = string
 }

@@ -1,5 +1,9 @@
 terraform {
   required_providers {
+    vault = {
+      source  = "hashicorp/vault"
+      version = "5.7.0"
+    }
     aws = {
       source  = "hashicorp/aws"
       version = "6.31.0"
@@ -7,7 +11,11 @@ terraform {
   }
 }
 
+provider "vault" {
+  address = var.address
+  token   = var.token
+}
+
 provider "aws" {
-  region  = "us-east-1"
-  profile = "team2-dev"
+  # Configuration options
 }
