@@ -1,173 +1,194 @@
-# AWS Roles Anywhere + Vault Hub/Spoke Test Environment
+# AWS Roles Anywhere + Vault (Hub-and-Spoke Example)
 
-This repository provisions a sandbox test environment for using HashiCorp Vault
-PKI with AWS Roles Anywhere in a hub-and-spoke AWS account pattern. The root
-module configures Vault and the hub AWS account. Each `_team*` subfolder
-configures a spoke AWS account role for a specific team/environment.
+This repository demonstrates a working reference implementation of using **HashiCorp Vault PKI** with **AWS Roles Anywhere** to enable **machine authentication to AWS using X.509 certificates**.
 
-## What This Does
+The design uses a **hub-and-spoke AWS account model**, where a central (hub) account hosts Roles Anywhere resources and workloads ultimately access resources in spoke accounts.
 
-Root (hub) module:
-- Enables Vault PKI and AppRole auth.
-- Creates Vault PKI roles, Vault policies, and Vault AppRoles for:
-  - `team1-dev`
-  - `team1-prod`
-  - `team2-dev`
-- Creates a Roles Anywhere trust anchor and two Roles Anywhere profiles in the
-  hub AWS account:
-  - `ra-profile-team1`
-  - `ra-profile-team2`
-- Creates hub IAM roles that are assumed via Roles Anywhere, and then assume
-  spoke roles in each team account:
-  - `ra-hub-team1-dev`
-  - `ra-hub-team1-prod`
-  - `ra-hub-team2-dev`
+---
 
-Spoke modules (`_team1-dev`, `_team1-prod`, `_team2-dev`):
-- Create an IAM role in the spoke account that trusts the hub role.
-- Optionally attach readonly or admin permissions.
-- Create a small S3 bucket to validate access.
+## What Problem This Solves
+
+Traditional approaches to AWS access often rely on:
+
+- Long-lived IAM access keys
+- Credential brokering (e.g., Vault AWS Secrets Engine)
+- Human SSO flows reused for machines (e.g., saml2aws)
+
+This implementation replaces those patterns with:
+
+> **Short-lived, identity-based authentication using certificates**
+
+- No static AWS credentials
+- No Vault → AWS API dependency
+- AWS IAM enforces authorization
+
+---
+
+## Architecture Overview
+
+High-level flow:
+
+1. Workload authenticates to Vault (AppRole)
+2. Vault issues a short-lived X.509 certificate
+3. Certificate contains a SPIFFE URI identity
+4. Workload uses `aws_signing_helper` to authenticate to AWS Roles Anywhere
+5. AWS validates the certificate against the Trust Anchor (CA)
+6. IAM evaluates the identity and returns temporary credentials
+7. Hub role assumes a spoke role for resource access
+
+Key concept:
+
+> Vault = Identity Provider  
+> AWS IAM = Authorization / Enforcement
+
+---
+
+## Repository Structure
+
+### Root (Hub)
+
+- Vault configuration (PKI, AppRole, policies)
+- AWS Roles Anywhere:
+  - Trust Anchor
+  - Profiles
+- Hub IAM roles (assumed via Roles Anywhere)
+
+### Spoke Modules
+
+Each `_team*` folder represents a separate AWS account:
+
+- IAM role trusting the hub role
+- Optional permissions (readonly/admin)
+- Test S3 bucket
+
+---
 
 ## Apply Order
 
-1. **Root / hub module first**
-   ```bash
-   terraform init
-   terraform apply
-   ```
-
-2. **Then each spoke module**
-   ```bash
-   cd _team1-dev
-   terraform init
-   terraform apply
-
-   cd ../_team1-prod
-   terraform init
-   terraform apply
-
-   cd ../_team2-dev
-   terraform init
-   terraform apply
-   ```
-
-## Testing Flow (team scripts)
-
-Each `_team*/team*-testing.sh` script drives a full end‑to‑end test:
-
-1. Use a **secret‑id generator Vault token** to create a new AppRole `secret_id`.
-2. Authenticate to Vault via AppRole (`role_id` + `secret_id`).
-3. Use the resulting Vault token to issue a PKI cert for Roles Anywhere.
-4. Use `aws_signing_helper` to get AWS credentials via Roles Anywhere.
-5. Assume the spoke role in the team account.
-6. Run AWS commands (e.g., `aws s3 ls`).
-
-Current team-to-resource mapping:
-
-- `_team1-dev/team1-dev-testing.sh`
-  - AppRole: `team1-dev`
-  - PKI role: `team1-dev`
-  - Roles Anywhere profile: `ra-profile-team1`
-  - Hub IAM role: `ra-hub-team1-dev`
-  - SPIFFE URI pattern: `spiffe://blacks4/team1/dev/*`
-- `_team1-prod/team1-prod-testing.sh`
-  - AppRole: `team1-prod`
-  - PKI role: `team1-prod`
-  - Roles Anywhere profile: `ra-profile-team1`
-  - Hub IAM role: `ra-hub-team1-prod`
-  - SPIFFE URI pattern: `spiffe://blacks4/team1/prod/*`
-- `_team2-dev/team2-dev-testing.sh`
-  - AppRole: `team2-dev`
-  - PKI role: `team2-dev`
-  - Roles Anywhere profile: `ra-profile-team2`
-  - Hub IAM role: `ra-hub-team2-dev`
-  - SPIFFE URI pattern: `spiffe://blacks4/team2/dev/*`
-
-### Update Script Variables
-
-After all Terraform code has been applied, **edit the variables** at the top of
-each team testing script:
-
-- `VAULT_ADDR`
-- `VAULT_NAMESPACE`
-- `SECRET_ID_VAULT_TOKEN`
-- `ROLE_ID`
-- `TRUST_ANCHOR_ARN`
-- `PROFILE_ARN`
-- `ROLE_ARN`
-- `SPOKE_ROLE_ARN`
-- `SPIFFE_URI`
-- `APPROLE_NAME`
-- `PKI_ROLE_NAME`
-- `CERT_PREFIX`
-
-The scripts now intentionally ship with placeholder values for:
-
-- `SECRET_ID_VAULT_TOKEN`
-- `ROLE_ID`
-
-Those must be replaced after Terraform is applied and after you create the
-appropriate secret-id generator token.
-
-### Generating the Secret‑ID Generator Token
-
-From an admin account, create a token that **only** allows generating AppRole
-`secret_id` values for the team:
+### 1. Deploy hub (root module)
 
 ```bash
-vault token create -policy=team1-dev-approle-secretid -renewable -orphan -ttl=24h
-vault token create -policy=team1-prod-approle-secretid -renewable -orphan -ttl=24h
-vault token create -policy=team2-dev-approle-secretid -renewable -orphan -ttl=2h
+terraform init
+terraform apply
 ```
 
-That token value is used as `SECRET_ID_VAULT_TOKEN` in the team test script.
+### 2. Deploy spoke accounts
 
-The corresponding AppRole `role_id` values are exposed by the root module
-outputs:
+```bash
+cd _team1-dev
+terraform init
+terraform apply
 
-- `team1-dev-approle-role-id`
-- `team1-prod-approle-role-id`
-- `team2-dev-approle-role-id`
+cd ../_team1-prod
+terraform init
+terraform apply
 
-### What the Token Permits
+cd ../_team2-dev
+terraform init
+terraform apply
+```
 
-The `SECRET_ID_VAULT_TOKEN` **cannot issue PKI certs**. It can only create a
-`secret_id` for the team’s AppRole. The AppRole login token then has the
-team’s PKI policy and can issue the matching Roles Anywhere certificate:
+---
 
-- `team1-dev-ra-policy` can issue `pki-aws-2-int/issue/team1-dev`
-- `team1-prod-ra-policy` can issue `pki-aws-2-int/issue/team1-prod`
-- `team2-dev-ra-policy` can issue `pki-aws-2-int/issue/team2-dev`
+## End-to-End Test Flow
+
+Each team folder (`_team*`) contains a helper script (e.g., `team1-dev-testing.sh`) that performs the full flow automatically:
+
+1. Generate AppRole `secret_id`
+2. Authenticate to Vault (AppRole login)
+3. Issue PKI certificate
+4. Authenticate to AWS via Roles Anywhere
+5. Assume spoke role
+6. Execute AWS command (`aws s3 ls`)
+
+These scripts are intended to demonstrate the **complete end-to-end machine authentication flow** with minimal manual steps.
+
+---
+
+## Identity Model (Important)
+
+This implementation uses **SPIFFE URIs in the certificate SAN**, not `common_name`.
+
+Example:
+
+```
+spiffe://blacks4/team1/dev/app
+```
+
+Why:
+
+- Structured identity (team / environment / service)
+- Enforced in both Vault PKI roles and AWS IAM policies
+- AWS evaluates SAN fields, not `common_name`
+
+---
+
+## Vault Responsibilities
+
+- Manage PKI (root / intermediate CA)
+- Define PKI roles (identity boundaries)
+- Configure AppRole authentication
+- Issue certificates
+
+---
+
+## AWS Responsibilities
+
+- Configure Roles Anywhere Trust Anchor
+- Manage certificate bundles (rotation)
+- Define Profiles
+- Create IAM roles and policies
+
+---
+
+## Certificate Lifecycle
+
+- One CA can be reused across all AWS accounts
+- Trust Anchor supports **certificate bundles**
+
+Rotation process:
+
+1. Add new CA to bundle
+2. Begin issuing new certs
+3. Wait for old certs to expire
+4. Remove old CA
+
+No Trust Anchor ARN changes required.
+
+---
+
+## Security Model
+
+- Vault does **not store AWS credentials**
+- Vault does **not call AWS APIs**
+- Authentication = certificate (identity)
+- Authorization = IAM policy
+
+---
 
 ## Notes
 
-- The hub policy must reference the exact spoke role names that exist in each
-  spoke account. Keep `spoke_role_name` values in the spoke stacks aligned with
-  the root variables:
-  - `team1_dev_spoke_role_name`
-  - `team1_prod_spoke_role_name`
-  - `team2_dev_spoke_role_name`
+- AppRole secret-id generator tokens are scoped to only generate `secret_id`
+- PKI roles restrict allowed SPIFFE identities
+- Hub roles must align with spoke role trust policies
+- Role chaining introduces a 1-hour session limit (AWS constraint)
 
-- Team 1 is split by environment all the way through the stack:
-  - Vault PKI role names
-  - Vault AppRole names
-  - Vault secret-id generator policies
-  - Roles Anywhere hub IAM roles
-  - SPIFFE URI prefixes
-
-- Valid SPIFFE examples for the current configuration:
-  - `spiffe://blacks4/team1/dev/app`
-  - `spiffe://blacks4/team1/prod/app`
-  - `spiffe://blacks4/team2/dev/app`
-
-- Default AppRole token TTLs and secret_id TTLs are set to 15 minutes.
+---
 
 ## Expected Outcome
 
-Once configured and applied:
-- Teams can generate short‑lived AppRole `secret_id` values using their
-  `SECRET_ID_VAULT_TOKEN`.
-- Teams can authenticate to Vault via AppRole and issue short‑lived certs.
-- Roles Anywhere can assume the correct environment-specific hub role, which
-  then assumes the matching spoke role.
-- AWS API calls work using the assumed spoke role (e.g., `aws s3 ls`).
+After deployment:
+
+- Workloads authenticate to Vault using AppRole
+- Vault issues short-lived certificates
+- AWS Roles Anywhere exchanges certs for temporary credentials
+- Workloads assume correct roles and access AWS resources
+
+---
+
+## Disclaimer
+
+This repository is a **sanitized example for demonstration purposes only**.
+
+It is not production-hardened and should be adapted to meet your organization’s security, networking, and operational requirements.
+
