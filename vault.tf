@@ -53,6 +53,8 @@ resource "vault_pki_secret_backend_role" "team1_dev" {
   require_cn       = false
   allow_any_name   = false
   allowed_uri_sans = ["spiffe://example/team1/dev/*"]
+  organization     = ["example"]
+  ou               = ["team1-dev"]
 
   ttl     = "1200" # 20 minutes
   max_ttl = "1200" # 20 minutes
@@ -65,6 +67,8 @@ resource "vault_pki_secret_backend_role" "team1_prod" {
   require_cn       = false
   allow_any_name   = false
   allowed_uri_sans = ["spiffe://example/team1/prod/*"]
+  organization     = ["example"]
+  ou               = ["team1-prod"]
 
   ttl     = "1200" # 20 minutes
   max_ttl = "1200" # 20 minutes
@@ -77,6 +81,8 @@ resource "vault_pki_secret_backend_role" "team2_dev" {
   require_cn       = false
   allow_any_name   = false
   allowed_uri_sans = ["spiffe://example/team2/dev/*"]
+  organization     = ["example"]
+  ou               = ["team2-dev"]
 
   ttl     = "1200" # 20 minutes
   max_ttl = "1200" # 20 minutes
@@ -109,69 +115,6 @@ resource "vault_policy" "team2_dev" {
   policy = <<EOT
 path "pki-aws-2-int/issue/team2-dev" {
   capabilities = ["update"]
-}
-EOT
-}
-
-# configure AppRole auth method and roles for each team to retrieve certs
-resource "vault_auth_backend" "approle" {
-  type = "approle"
-}
-
-resource "vault_approle_auth_backend_role" "team1_dev" {
-  backend        = vault_auth_backend.approle.path
-  role_name      = "team1-dev"
-  secret_id_ttl  = 900
-  token_ttl      = 900
-  token_max_ttl  = 900
-  token_policies = ["team1-dev-ra-policy"]
-}
-
-resource "vault_approle_auth_backend_role" "team1_prod" {
-  backend        = vault_auth_backend.approle.path
-  role_name      = "team1-prod"
-  secret_id_ttl  = 900
-  token_ttl      = 900
-  token_max_ttl  = 900
-  token_policies = ["team1-prod-ra-policy"]
-}
-
-resource "vault_approle_auth_backend_role" "team2_dev" {
-  backend        = vault_auth_backend.approle.path
-  role_name      = "team2-dev"
-  secret_id_ttl  = 900
-  token_ttl      = 900
-  token_max_ttl  = 900
-  token_policies = ["team2-dev-ra-policy"]
-}
-
-# policies for generating AppRole secret_ids
-resource "vault_policy" "team1_dev_approle_secret_id" {
-  name = "team1-dev-approle-secretid"
-
-  policy = <<EOT
-path "auth/approle/role/team1-dev/secret-id" {
-  capabilities = ["create", "update"]
-}
-EOT
-}
-
-resource "vault_policy" "team1_prod_approle_secret_id" {
-  name = "team1-prod-approle-secretid"
-
-  policy = <<EOT
-path "auth/approle/role/team1-prod/secret-id" {
-  capabilities = ["create", "update"]
-}
-EOT
-}
-
-resource "vault_policy" "team2_dev_approle_secret_id" {
-  name = "team2-dev-approle-secretid"
-
-  policy = <<EOT
-path "auth/approle/role/team2-dev/secret-id" {
-  capabilities = ["create", "update"]
 }
 EOT
 }

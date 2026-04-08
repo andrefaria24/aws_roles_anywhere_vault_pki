@@ -107,7 +107,9 @@ These scripts are intended to demonstrate the **complete end-to-end machine auth
 
 ## Identity Model (Important)
 
-This implementation uses **SPIFFE URIs in the certificate SAN**, not `common_name`.
+This implementation uses **SPIFFE URIs in the certificate SAN** for authorization, not `common_name`.
+
+IAM Roles Anywhere still requires the certificate subject to be non-empty, so issued leaf certificates should include at least one subject RDN such as `O` or `OU` even when authorization is based on SAN values.
 
 Example:
 

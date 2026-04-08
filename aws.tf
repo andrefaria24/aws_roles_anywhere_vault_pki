@@ -72,17 +72,26 @@ resource "aws_iam_role_policy" "ra_hub_team1_dev_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "sts:AssumeRole",
-        "sts:SetSourceIdentity",
-        "sts:TagSession"
-      ]
-      Resource = [
-        "arn:aws:iam::${var.team1_dev_account_id}:role/${var.team1_dev_spoke_role_name}"
-      ]
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sts:AssumeRole",
+          "sts:SetSourceIdentity",
+          "sts:TagSession"
+        ]
+        Resource = [
+          "arn:aws:iam::${var.team1_dev_account_id}:role/${var.team1_dev_spoke_role_name}"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListAllMyBuckets"
+        ]
+        Resource = "*"
+      }
+    ]
   })
 }
 

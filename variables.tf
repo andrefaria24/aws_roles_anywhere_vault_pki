@@ -1,8 +1,24 @@
-variable "address" {
+variable "vault_address" {
   type = string
 }
-variable "token" {
+
+variable "vault_token" {
+  type      = string
+  sensitive = true
+}
+
+variable "aws_region" {
+  type    = string
+  default = "us-east-2"
+}
+
+variable "aws_profile" {
   type = string
+}
+
+variable "aws_credentials_file_location" {
+  type      = string
+  sensitive = true
 }
 
 variable "team1_dev_account_id" {
