@@ -39,7 +39,7 @@ resource "vault_pki_secret_backend_role" "team_roles" {
   for_each = var.team_apps
 
   backend = "pki-aws-int" # Hardcoded for now
-  name    = each.key
+  name    = lower(each.key)
 
   require_cn     = false
   allow_any_name = false
@@ -49,4 +49,20 @@ resource "vault_pki_secret_backend_role" "team_roles" {
 
   ttl     = "1800" # 30 minutes
   max_ttl = "1800" # 30 minutes
+}
+
+resource "vault_policy" "issue_certs" {
+  for_each = var.team_apps
+
+  name = "${lower(each.key)}-iam-roles-anywhere-issue-certs"
+
+  policy = <<EOT
+path "pki-aws-int/issue/${lower(each.key)}" {
+  capabilities = ["update"]
+}
+
+path "pki-aws-int/issue/${lower(each.key)}/*" {
+  capabilities = ["update"]
+}
+EOT
 }
