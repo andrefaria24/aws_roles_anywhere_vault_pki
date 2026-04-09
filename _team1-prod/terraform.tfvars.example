@@ -1,4 +1,0 @@
-hub_account_id   = "1234567890" # AWS account ID where the Roles Anywhere trust anchor and profile are created
-hub_role_name    = "ra-hub-team1-prod"
-spoke_role_name  = "ra-spoke-team1-prod"
-permissions_mode = "readonly"
