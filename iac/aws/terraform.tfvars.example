@@ -1,0 +1,11 @@
+vault_address = "<VAULT_ADDRESS>"
+vault_token   = "<VAULT_TOKEN>"
+
+aws_credentials_file_location = "C:\\Users\\<USERNAME>\\.aws\\credentials"
+aws_profile                   = "<AWS_PROFILE>"
+
+team_apps = {
+  Team1 = ["App1", "App2", "App3"]
+  Team2 = ["App4"]
+  Team3 = ["App5"]
+}

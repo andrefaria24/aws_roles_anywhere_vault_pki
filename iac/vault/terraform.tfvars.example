@@ -1,0 +1,3 @@
+vault_address = "<VAULT_ADDRESS>"
+vault_token   = "<VAULT_TOKEN>"
+domain_name   = "example.com"
