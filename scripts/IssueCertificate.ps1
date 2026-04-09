@@ -7,15 +7,17 @@ param(
 
   [string]$VaultNamespace = "admin",
 
-  [string]$PkiRoleName = "team1-dev",
+  [string]$PkiBackend = "pki-aws-int",
 
-  [string]$SpiffeUri = "spiffe://example/team1/dev/app",
+  [string]$PkiRoleName = "Team1",
 
-  [string]$CertPath = ".\\cert.pem",
+  [string]$SpiffeUri = "spiffe://example/Team1/App1/test",
 
-  [string]$KeyPath = ".\\key.pem",
+  [string]$CertPath = ".\\certs\\cert.pem",
 
-  [string]$CaPath = ".\\issuing_ca.pem"
+  [string]$KeyPath = ".\\certs\\key.pem",
+
+  [string]$CaPath = ".\\certs\\issuing_ca.pem"
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,7 +33,7 @@ $headers = @{
 
 $response = Invoke-RestMethod `
   -Method Post `
-  -Uri "$VaultAddr/v1/pki-aws-2-int/issue/$PkiRoleName" `
+  -Uri "$VaultAddr/v1/$PkiBackend/issue/$PkiRoleName" `
   -Headers $headers `
   -ContentType "application/json" `
   -Body $body
