@@ -34,3 +34,19 @@ resource "aws_iam_role" "iam_roles_anywhere_assume_role" {
     }]
   })
 }
+
+resource "vault_pki_secret_backend_role" "team_roles" {
+  for_each = var.team_apps
+
+  backend = "pki-aws-int" # Hardcoded for now
+  name    = each.key
+
+  require_cn     = false
+  allow_any_name = false
+  allowed_uri_sans = [
+    for app in sort(tolist(each.value)) : "spiffe://example/${each.key}/${app}/*"
+  ]
+
+  ttl     = "1800" # 30 minutes
+  max_ttl = "1800" # 30 minutes
+}

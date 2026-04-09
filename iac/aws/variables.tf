@@ -15,3 +15,12 @@ variable "aws_credentials_file_location" {
 variable "team_apps" {
   type = map(set(string))
 }
+
+variable "vault_address" {
+  type = string
+}
+
+variable "vault_token" {
+  type      = string
+  sensitive = true
+}
