@@ -19,3 +19,7 @@ crash.*.log
 # Certificates
 *.pem
 *.key
+
+# Python
+__pycache__/
+*.pyc
