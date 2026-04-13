@@ -1,0 +1,15 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: roles-anywhere-auth
+spec:
+  vaultConnectionRef: roles-anywhere-vault
+  method: jwt
+  mount: jwt
+  namespace: admin
+  jwt:
+    role: roles-anywhere-demo
+    serviceAccount: roles-anywhere-demo
+    audiences:
+      - vault
+    tokenExpirationSeconds: 600

@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: roles-anywhere-hello-world
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: roles-anywhere-hello-world
+  template:
+    metadata:
+      labels:
+        app: roles-anywhere-hello-world
+    spec:
+      serviceAccountName: roles-anywhere-demo
+      containers:
+        - name: app
+          image: REPLACE_ME/roles-anywhere-hello-world:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: roles-anywhere-config
+          env:
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: roles-anywhere-config
+                  key: AWS_REGION
+            - name: AWS_EC2_METADATA_SERVICE_ENDPOINT
+              value: http://127.0.0.1:9911
+            - name: PORT
+              value: "8080"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+        - name: aws-signing-helper
+          image: REPLACE_ME/aws-signing-helper:1.8.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - serve
+            - --certificate
+            - /var/run/roles-anywhere/tls.crt
+            - --private-key
+            - /var/run/roles-anywhere/tls.key
+            - --trust-anchor-arn
+            - $(AWS_TRUST_ANCHOR_ARN)
+            - --profile-arn
+            - $(AWS_PROFILE_ARN)
+            - --role-arn
+            - $(AWS_ROLE_ARN)
+            - --region
+            - $(AWS_REGION)
+            - --port
+            - "9911"
+            - --hop-limit
+            - "1"
+          envFrom:
+            - configMapRef:
+                name: roles-anywhere-config
+          ports:
+            - containerPort: 9911
+              name: imds
+          volumeMounts:
+            - name: roles-anywhere-client-cert
+              mountPath: /var/run/roles-anywhere
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+      volumes:
+        - name: roles-anywhere-client-cert
+          secret:
+            secretName: roles-anywhere-client-cert

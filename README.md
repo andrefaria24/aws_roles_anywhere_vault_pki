@@ -20,6 +20,7 @@ The demo is split into two Terraform stacks with clear ownership:
 
 - [`iac/vault`](C:/Dev/aws_roles_anywhere_vault_pki/iac/vault/README.md): Vault PKI configuration and issuer certificate export.
 - [`iac/aws`](C:/Dev/aws_roles_anywhere_vault_pki/iac/aws/README.md): AWS IAM Roles Anywhere trust anchor, profiles, IAM roles, and Vault-side team/app issuance mappings.
+- [`k8s/roles-anywhere-hello-world`](C:/Dev/aws_roles_anywhere_vault_pki/k8s/roles-anywhere-hello-world/README.md): VSO-based Kubernetes hello-world app that requests a Vault-issued certificate and uses IAM Roles Anywhere through `aws_signing_helper`.
 - [`scripts/IssueCertificate.ps1`](C:/Dev/aws_roles_anywhere_vault_pki/scripts/IssueCertificate.ps1): Requests a workload certificate from Vault and writes the cert, key, and issuing CA locally.
 - [`scripts/ListS3Buckets.ps1`](C:/Dev/aws_roles_anywhere_vault_pki/scripts/ListS3Buckets.ps1): Uses `aws_signing_helper` to obtain temporary AWS credentials and runs `aws s3 ls`.
 
@@ -39,5 +40,6 @@ In practice, the Vault team is responsible for producing and handing off the int
 3. Apply the AWS stack with the desired `team_apps` mapping.
 4. Issue a workload certificate with [`scripts/IssueCertificate.ps1`](C:/Dev/aws_roles_anywhere_vault_pki/scripts/IssueCertificate.ps1).
 5. Use [`scripts/ListS3Buckets.ps1`](C:/Dev/aws_roles_anywhere_vault_pki/scripts/ListS3Buckets.ps1) or an AWS CLI profile backed by `aws_signing_helper` to confirm the workload can assume the intended role and access AWS.
+6. Deploy the Kubernetes example in [`k8s/roles-anywhere-hello-world`](C:/Dev/aws_roles_anywhere_vault_pki/k8s/roles-anywhere-hello-world/README.md) to have VSO issue the workload certificate inside the cluster and vend AWS credentials to the pod.
 
 For module-specific details, inputs, outputs, and operational responsibilities, use the module READMEs linked above.
