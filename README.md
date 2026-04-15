@@ -21,6 +21,8 @@ The demo is split into two Terraform stacks with clear ownership:
 - [`iac/vault`](C:/Dev/aws_roles_anywhere_vault_pki/iac/vault/README.md): Vault PKI configuration and issuer certificate export.
 - [`iac/aws`](C:/Dev/aws_roles_anywhere_vault_pki/iac/aws/README.md): AWS IAM Roles Anywhere trust anchor, profiles, IAM roles, and Vault-side team/app issuance mappings.
 - [`k8s/roles-anywhere-hello-world`](C:/Dev/aws_roles_anywhere_vault_pki/k8s/roles-anywhere-hello-world/README.md): VSO-based Kubernetes hello-world app that requests a Vault-issued certificate and uses IAM Roles Anywhere through `aws_signing_helper`.
+- [`vm/ListS3BucketsWithVaultAgent.ps1`](C:/Dev/aws_roles_anywhere_vault_pki/vm/ListS3BucketsWithVaultAgent.ps1): VM-oriented PowerShell workflow that uses Vault Agent templating to issue a client certificate and then authenticates to AWS IAM Roles Anywhere to list S3 buckets.
+- [`vault_agent/list_s3_buckets_with_vault_agent.py`](C:/Dev/aws_roles_anywhere_vault_pki/vault_agent/list_s3_buckets_with_vault_agent.py): Python example that uses Vault Agent templating to issue a client certificate and then authenticates to AWS IAM Roles Anywhere to list S3 buckets with `boto3`.
 - [`scripts/IssueCertificate.ps1`](C:/Dev/aws_roles_anywhere_vault_pki/scripts/IssueCertificate.ps1): Requests a workload certificate from Vault and writes the cert, key, and issuing CA locally.
 - [`scripts/ListS3Buckets.ps1`](C:/Dev/aws_roles_anywhere_vault_pki/scripts/ListS3Buckets.ps1): Uses `aws_signing_helper` to obtain temporary AWS credentials and runs `aws s3 ls`.
 
