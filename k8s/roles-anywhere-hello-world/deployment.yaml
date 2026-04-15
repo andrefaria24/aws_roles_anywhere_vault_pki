@@ -15,7 +15,7 @@ spec:
       serviceAccountName: roles-anywhere-demo
       containers:
         - name: app
-          image: REPLACE_ME/roles-anywhere-hello-world:0.1.0
+          image: APP_IMAGE_PLACEHOLDER
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -46,7 +46,7 @@ spec:
             runAsNonRoot: true
             runAsUser: 10001
         - name: aws-signing-helper
-          image: REPLACE_ME/aws-signing-helper:1.8.0
+          image: AWS_SIGNING_HELPER_IMAGE_PLACEHOLDER
           imagePullPolicy: IfNotPresent
           args:
             - serve

@@ -3,5 +3,5 @@ kind: VaultConnection
 metadata:
   name: roles-anywhere-vault
 spec:
-  address: https://vault.example.com:8200
+  address: VAULT_ADDR_PLACEHOLDER
   timeout: 10s

@@ -6,9 +6,128 @@ namespace: roles-anywhere-demo
 resources:
   - namespace.yaml
   - serviceaccount.yaml
-  - configmap.yaml
   - vault-connection.yaml
   - vault-auth.yaml
   - vault-pki-secret.yaml
   - deployment.yaml
   - service.yaml
+
+configMapGenerator:
+  - name: roles-anywhere-config
+    envs:
+      - .env
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.APP_IMAGE
+    targets:
+      - select:
+          kind: Deployment
+          name: roles-anywhere-hello-world
+        fieldPaths:
+          - spec.template.spec.containers.[name=app].image
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.AWS_SIGNING_HELPER_IMAGE
+    targets:
+      - select:
+          kind: Deployment
+          name: roles-anywhere-hello-world
+        fieldPaths:
+          - spec.template.spec.containers.[name=aws-signing-helper].image
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_ADDR
+    targets:
+      - select:
+          kind: VaultConnection
+          name: roles-anywhere-vault
+        fieldPaths:
+          - spec.address
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_NAMESPACE
+    targets:
+      - select:
+          kind: VaultAuth
+          name: roles-anywhere-auth
+        fieldPaths:
+          - spec.namespace
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_AUTH_MOUNT
+    targets:
+      - select:
+          kind: VaultAuth
+          name: roles-anywhere-auth
+        fieldPaths:
+          - spec.mount
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_AUTH_ROLE
+    targets:
+      - select:
+          kind: VaultAuth
+          name: roles-anywhere-auth
+        fieldPaths:
+          - spec.jwt.role
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_AUTH_SERVICE_ACCOUNT
+    targets:
+      - select:
+          kind: VaultAuth
+          name: roles-anywhere-auth
+        fieldPaths:
+          - spec.jwt.serviceAccount
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_AUTH_AUDIENCE
+    targets:
+      - select:
+          kind: VaultAuth
+          name: roles-anywhere-auth
+        fieldPaths:
+          - spec.jwt.audiences.0
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_PKI_MOUNT
+    targets:
+      - select:
+          kind: VaultPKISecret
+          name: roles-anywhere-client-cert
+        fieldPaths:
+          - spec.mount
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.VAULT_PKI_ROLE
+    targets:
+      - select:
+          kind: VaultPKISecret
+          name: roles-anywhere-client-cert
+        fieldPaths:
+          - spec.role
+  - source:
+      kind: ConfigMap
+      name: roles-anywhere-config
+      fieldPath: data.SPIFFE_URI
+    targets:
+      - select:
+          kind: VaultPKISecret
+          name: roles-anywhere-client-cert
+        fieldPaths:
+          - spec.uriSans.0

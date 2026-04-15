@@ -19,6 +19,7 @@ The example is aligned to the Terraform in this repository:
 
 - `app/`: tiny Python HTTP app that returns STS caller identity and, when allowed, S3 bucket names
 - `aws-signing-helper/`: container image for the AWS IAM Roles Anywhere helper
+- `.env.example`: template for all environment-specific values consumed by Kustomize
 - `scripts/ExportKubernetesJwtValidationPublicKeys.ps1`: exports the cluster's service-account signing keys as PEM for Vault JWT auth
 - `scripts/ConfigureVaultForVsoJwt.ps1`: configures the Vault JWT auth mount and role that VSO will use
 - `kustomization.yaml`: deployable manifest set for the demo namespace
@@ -109,29 +110,45 @@ This script:
 
 ## Update The Example Values
 
-Before applying the manifests, update these files:
+This example now reads its environment-specific values from `./.env` through Kustomize.
 
-- `configmap.yaml`
-  - set `AWS_TRUST_ANCHOR_ARN`
-  - set `AWS_PROFILE_ARN`
-  - set `AWS_ROLE_ARN`
-- `deployment.yaml`
-  - replace both `REPLACE_ME/...` image references
-- `vault-connection.yaml`
-  - set the real Vault address
-- `vault-server-ca-secret.example.yaml`
-  - use this only when Vault is fronted by a private CA
-- `vault-pki-secret.yaml`
-  - change the `role` and `uriSans` values if you want a different team or app
+Create the file from the template:
+
+```powershell
+Copy-Item .\k8s\roles-anywhere-hello-world\.env.example .\k8s\roles-anywhere-hello-world\.env
+```
+
+Then edit `./k8s/roles-anywhere-hello-world/.env` and set:
+
+- `APP_IMAGE`
+- `AWS_SIGNING_HELPER_IMAGE`
+- `VAULT_ADDR`
+- `AWS_TRUST_ANCHOR_ARN`
+- `AWS_PROFILE_ARN`
+- `AWS_ROLE_ARN`
+
+The same `.env` file also drives:
+
+- the hello-world message and AWS region
+- the Vault namespace, JWT auth mount, auth role, and audience
+- the Vault PKI mount, PKI role, and requested SPIFFE URI
+
+If Vault uses a private CA, keep using `vault-server-ca-secret.example.yaml` separately. That secret is intentionally not sourced from `.env`.
 
 Important:
 
 - The PKI role name created by Terraform is lower-case team name, so `Team1` becomes `team1`.
 - The URI SAN must stay inside the AWS trust policy pattern. For `Team1` and `App1`, the allowed pattern is `spiffe://example/Team1/App1/*`.
 - The current Terraform PKI role only constrains URI SANs and does not allow an arbitrary certificate common name, so this example omits `commonName` from `vault-pki-secret.yaml`.
-- If you use Vault Enterprise namespaces or HCP Vault Dedicated, add the correct Vault namespace under `spec.namespace` in `vault-auth.yaml`, and if needed in `vault-pki-secret.yaml`.
+- If you use Vault Enterprise namespaces or HCP Vault Dedicated, set the correct Vault namespace in `.env` as `VAULT_NAMESPACE`.
 - For a public HCP Vault endpoint, do not set `caCertSecretRef` in `vault-connection.yaml`. VSO should use the system trust store. Only set `caCertSecretRef` when the Vault HTTPS certificate chains to a private CA that the cluster does not already trust.
-- The `vault-auth.yaml` in this example uses `method: jwt`, `mount: jwt`, and asks VSO to mint a short-lived service account token with audience `vault`.
+- The `vault-auth.yaml` in this example uses `method: jwt` and asks VSO to mint a short-lived service account token with the audience configured in `.env`.
+
+Validate the rendered manifests before applying them:
+
+```powershell
+kubectl kustomize .\k8s\roles-anywhere-hello-world
+```
 
 ## Deploy
 

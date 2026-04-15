@@ -5,11 +5,11 @@ metadata:
 spec:
   vaultConnectionRef: roles-anywhere-vault
   method: jwt
-  mount: jwt
-  namespace: admin
+  mount: VAULT_AUTH_MOUNT_PLACEHOLDER
+  namespace: VAULT_NAMESPACE_PLACEHOLDER
   jwt:
-    role: roles-anywhere-demo
-    serviceAccount: roles-anywhere-demo
+    role: VAULT_AUTH_ROLE_PLACEHOLDER
+    serviceAccount: VAULT_AUTH_SERVICE_ACCOUNT_PLACEHOLDER
     audiences:
-      - vault
+      - VAULT_AUTH_AUDIENCE_PLACEHOLDER
     tokenExpirationSeconds: 600
