@@ -20,8 +20,8 @@ The example is aligned to the Terraform in this repository:
 - `app/`: tiny Python HTTP app that returns STS caller identity and, when allowed, S3 bucket names
 - `aws-signing-helper/`: container image for the AWS IAM Roles Anywhere helper
 - `.env.example`: template for all environment-specific values consumed by Kustomize
-- `scripts/ExportKubernetesJwtValidationPublicKeys.ps1`: exports the cluster's service-account signing keys as PEM for Vault JWT auth
-- `scripts/ConfigureVaultForVsoJwt.ps1`: configures the Vault JWT auth mount and role that VSO will use
+- `../../scripts/ExportKubernetesJwtValidationPublicKeys.ps1`: exports the cluster's service-account signing keys as PEM for Vault JWT auth
+- `../../scripts/ConfigureVaultForVsoJwt.ps1`: configures the Vault JWT auth mount and role that VSO will use
 - `kustomization.yaml`: deployable manifest set for the demo namespace
 
 ## Prerequisites
@@ -77,7 +77,7 @@ The AWS Terraform stack already creates the PKI role and the policy for `Team1`.
 First, export the Kubernetes service-account signing public keys in PEM format. Run this from a shell where `kubectl` already talks to the target cluster:
 
 ```powershell
-.\k8s\roles-anywhere-hello-world\scripts\ExportKubernetesJwtValidationPublicKeys.ps1 `
+.\scripts\ExportKubernetesJwtValidationPublicKeys.ps1 `
   -OutputPath .\jwt_validation_pubkeys.pem
 ```
 
@@ -90,7 +90,7 @@ kubectl get --raw /.well-known/openid-configuration
 Then configure Vault JWT auth:
 
 ```powershell
-.\k8s\roles-anywhere-hello-world\scripts\ConfigureVaultForVsoJwt.ps1 `
+.\scripts\ConfigureVaultForVsoJwt.ps1 `
   -VaultAddr https://<vault-host>:8200 `
   -VaultToken <vault-token> `
   -JwtValidationPublicKeysPath .\jwt_validation_pubkeys.pem `

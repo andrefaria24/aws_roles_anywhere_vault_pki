@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -12,11 +11,21 @@ from botocore.exceptions import BotoCoreError, ClientError
 from cryptography import x509
 from cryptography.x509.oid import ExtensionOID
 
+DEFAULT_VAULT_CLIENT_CERT = Path("certs") / "team1_vm_bootstrap_client_cert.pem"
+DEFAULT_VAULT_CLIENT_KEY = Path("certs") / "team1_vm_bootstrap_client_key.pem"
+
 
 def resolve_executable(name: str) -> str:
     path = shutil.which(name)
     if not path:
         raise RuntimeError(f"Required executable not found on PATH: {name}")
+    return path
+
+
+def resolve_existing_file(path_value: str, description: str) -> Path:
+    path = Path(path_value).expanduser().resolve()
+    if not path.is_file():
+        raise RuntimeError(f"Required {description} was not found: {path}")
     return path
 
 
@@ -26,13 +35,24 @@ def write_text(path: Path, content: str) -> None:
 
 
 def run_command(args: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        args,
-        text=True,
-        capture_output=True,
-        check=False,
-        **kwargs,
-    )
+    try:
+        result = subprocess.run(
+            args,
+            text=True,
+            capture_output=True,
+            check=False,
+            **kwargs,
+        )
+    except subprocess.TimeoutExpired as exc:
+        command = " ".join(args)
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        raise RuntimeError(
+            f"Command timed out after {exc.timeout} seconds: {command}\n"
+            f"stdout:\n{stdout}\n"
+            f"stderr:\n{stderr}"
+        ) from exc
+
     if result.returncode != 0:
         command = " ".join(args)
         raise RuntimeError(
@@ -68,11 +88,15 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--vault-addr", required=True)
-    parser.add_argument("--vault-token", required=True)
     parser.add_argument("--trust-anchor-arn", required=True)
     parser.add_argument("--profile-arn", required=True)
     parser.add_argument("--role-arn", required=True)
     parser.add_argument("--vault-namespace", default="admin")
+    parser.add_argument("--vault-auth-path", default="auth/cert")
+    parser.add_argument("--vault-auth-cert-name", default="team1-vm")
+    parser.add_argument("--vault-client-cert", default=str(DEFAULT_VAULT_CLIENT_CERT))
+    parser.add_argument("--vault-client-key", default=str(DEFAULT_VAULT_CLIENT_KEY))
+    parser.add_argument("--vault-ca-cert")
     parser.add_argument("--pki-backend", default="pki-aws-int")
     parser.add_argument("--pki-role-name", default="team1")
     parser.add_argument("--spiffe-uri", default="spiffe://example/Team1/App1/python")
@@ -80,6 +104,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--region", default="us-east-2")
     parser.add_argument("--endpoint")
     parser.add_argument("--vault-agent-path", default="vault")
+    parser.add_argument("--vault-agent-timeout-seconds", type=int, default=20)
     parser.add_argument("--aws-signing-helper-path", default="aws_signing_helper")
     parser.add_argument("--working-directory")
     parser.add_argument("--keep-artifacts", action="store_true")
@@ -92,6 +117,12 @@ def main() -> int:
     endpoint = args.endpoint or f"https://rolesanywhere.{args.region}.amazonaws.com"
     vault_agent_exe = resolve_executable(args.vault_agent_path)
     aws_signing_helper_exe = resolve_executable(args.aws_signing_helper_path)
+    vault_client_cert = resolve_existing_file(args.vault_client_cert, "Vault client certificate")
+    vault_client_key = resolve_existing_file(args.vault_client_key, "Vault client private key")
+
+    vault_ca_cert = None
+    if args.vault_ca_cert:
+        vault_ca_cert = resolve_existing_file(args.vault_ca_cert, "Vault CA certificate")
 
     working_dir = (
         Path(args.working_directory).resolve()
@@ -102,7 +133,6 @@ def main() -> int:
     )
     render_dir = working_dir / "rendered"
 
-    token_file = working_dir / "vault-token.txt"
     sink_file = working_dir / "auto-auth-token.txt"
     template_file = working_dir / "issue-cert.ctmpl"
     config_file = working_dir / "vault-agent.hcl"
@@ -114,7 +144,6 @@ def main() -> int:
 
     try:
         render_dir.mkdir(parents=True, exist_ok=True)
-        write_text(token_file, args.vault_token + "\n")
 
         cert_request_path = f"{args.pki_backend}/issue/{args.pki_role_name}"
         template_content = f"""{{{{- with pkiCert "{cert_request_path}" "uri_sans={args.spiffe_uri}" "ttl={args.certificate_ttl}" -}}}}
@@ -131,16 +160,23 @@ rendered
         if args.vault_namespace:
             namespace_line = f'  namespace = "{args.vault_namespace}"\n'
 
+        ca_cert_line = ""
+        if vault_ca_cert:
+            ca_cert_line = f'  ca_cert = "{vault_ca_cert.as_posix()}"\n'
+
         agent_config = f"""exit_after_auth = true
 
 vault {{
   address = "{args.vault_addr}"
-{namespace_line}}}
+{namespace_line}{ca_cert_line}}}
 
 auto_auth {{
-  method "token_file" {{
+  method "cert" {{
+    mount_path = "{args.vault_auth_path}"
     config = {{
-      token_file_path = "{token_file.as_posix()}"
+      name = "{args.vault_auth_cert_name}"
+      client_cert = "{vault_client_cert.as_posix()}"
+      client_key = "{vault_client_key.as_posix()}"
     }}
   }}
 
@@ -163,7 +199,10 @@ template {{
 """
         write_text(config_file, agent_config)
 
-        run_command([vault_agent_exe, "agent", f"-config={config_file}"])
+        run_command(
+            [vault_agent_exe, "agent", f"-config={config_file}"],
+            timeout=args.vault_agent_timeout_seconds,
+        )
 
         for path in (cert_path, key_path, ca_path):
             if not path.is_file():

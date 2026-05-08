@@ -1,3 +1,5 @@
 vault_address = "<VAULT_ADDRESS>"
 vault_token   = "<VAULT_TOKEN>"
 domain_name   = "example.com"
+team1_vm_bootstrap_common_name     = "team1-vm"
+team1_vm_bootstrap_certificate_ttl = "720h"

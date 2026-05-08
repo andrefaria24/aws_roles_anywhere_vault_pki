@@ -3,9 +3,6 @@ param(
   [string]$VaultAddr,
 
   [Parameter(Mandatory = $true)]
-  [string]$VaultToken,
-
-  [Parameter(Mandatory = $true)]
   [string]$TrustAnchorArn,
 
   [Parameter(Mandatory = $true)]
@@ -15,6 +12,16 @@ param(
   [string]$RoleArn,
 
   [string]$VaultNamespace = "admin",
+
+  [string]$VaultAuthPath = "auth/cert",
+
+  [string]$VaultAuthCertName = "team1-vm",
+
+  [string]$VaultClientCert = ".\certs\team1_vm_bootstrap_client_cert.pem",
+
+  [string]$VaultClientKey = ".\certs\team1_vm_bootstrap_client_key.pem",
+
+  [string]$VaultCaCert,
 
   [string]$PkiBackend = "pki-aws-int",
 
@@ -29,6 +36,8 @@ param(
   [string]$Endpoint,
 
   [string]$VaultAgentPath = "vault",
+
+  [int]$VaultAgentTimeoutSeconds = 20,
 
   [string]$AwsSigningHelperPath = "aws_signing_helper",
 
@@ -83,6 +92,24 @@ function Write-Utf8File {
   [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Resolve-ExistingFile {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Description
+  )
+
+  $resolved = [System.IO.Path]::GetFullPath($Path)
+
+  if (-not (Test-Path -LiteralPath $resolved -PathType Leaf)) {
+    throw "Required $Description was not found: $resolved"
+  }
+
+  $resolved
+}
+
 function Assert-FileExists {
   param(
     [Parameter(Mandatory = $true)]
@@ -101,6 +128,13 @@ if ([string]::IsNullOrWhiteSpace($Endpoint)) {
 $vaultAgentExe = Resolve-Executable -Name $VaultAgentPath
 $awsSigningHelperExe = Resolve-Executable -Name $AwsSigningHelperPath
 $awsCliExe = Resolve-Executable -Name $AwsCliPath
+$vaultClientCertFull = Resolve-ExistingFile -Path $VaultClientCert -Description "Vault client certificate"
+$vaultClientKeyFull = Resolve-ExistingFile -Path $VaultClientKey -Description "Vault client private key"
+$vaultCaCertFull = $null
+
+if (-not [string]::IsNullOrWhiteSpace($VaultCaCert)) {
+  $vaultCaCertFull = Resolve-ExistingFile -Path $VaultCaCert -Description "Vault CA certificate"
+}
 
 if ([string]::IsNullOrWhiteSpace($WorkingDirectory)) {
   $WorkingDirectory = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ("vault-agent-rolesanywhere-" + [guid]::NewGuid().ToString("N"))
@@ -109,18 +143,18 @@ if ([string]::IsNullOrWhiteSpace($WorkingDirectory)) {
 $workingDirFull = [System.IO.Path]::GetFullPath($WorkingDirectory)
 $renderDir = Join-Path -Path $workingDirFull -ChildPath "rendered"
 
-$tokenFile = Join-Path -Path $workingDirFull -ChildPath "vault-token.txt"
 $sinkFile = Join-Path -Path $workingDirFull -ChildPath "auto-auth-token.txt"
 $templateFile = Join-Path -Path $workingDirFull -ChildPath "issue-cert.ctmpl"
 $configFile = Join-Path -Path $workingDirFull -ChildPath "vault-agent.hcl"
 $renderMarker = Join-Path -Path $workingDirFull -ChildPath "rendered.txt"
+$vaultAgentStdoutFile = Join-Path -Path $workingDirFull -ChildPath "vault-agent.stdout.log"
+$vaultAgentStderrFile = Join-Path -Path $workingDirFull -ChildPath "vault-agent.stderr.log"
 
 $certPath = Join-Path -Path $renderDir -ChildPath "cert.pem"
 $keyPath = Join-Path -Path $renderDir -ChildPath "key.pem"
 $caPath = Join-Path -Path $renderDir -ChildPath "issuing_ca.pem"
 
 New-Item -ItemType Directory -Path $renderDir -Force | Out-Null
-Write-Utf8File -Path $tokenFile -Content ($VaultToken + [Environment]::NewLine)
 
 $certRequestPath = "$PkiBackend/issue/$PkiRoleName"
 $certPathAgent = Convert-ToAgentPath -Path $certPath
@@ -139,16 +173,23 @@ rendered
 
 Write-Utf8File -Path $templateFile -Content $templateContent
 
-$vaultAgentExeAgent = Convert-ToAgentPath -Path $vaultAgentExe
-$tokenFileAgent = Convert-ToAgentPath -Path $tokenFile
 $sinkFileAgent = Convert-ToAgentPath -Path $sinkFile
 $templateFileAgent = Convert-ToAgentPath -Path $templateFile
 $renderMarkerAgent = Convert-ToAgentPath -Path $renderMarker
+$vaultClientCertAgent = Convert-ToAgentPath -Path $vaultClientCertFull
+$vaultClientKeyAgent = Convert-ToAgentPath -Path $vaultClientKeyFull
 
 $namespaceLine = ""
 
 if (-not [string]::IsNullOrWhiteSpace($VaultNamespace)) {
   $namespaceLine = "  namespace = `"$VaultNamespace`""
+}
+
+$caCertLine = ""
+
+if (-not [string]::IsNullOrWhiteSpace($vaultCaCertFull)) {
+  $vaultCaCertAgent = Convert-ToAgentPath -Path $vaultCaCertFull
+  $caCertLine = "  ca_cert = `"$vaultCaCertAgent`""
 }
 
 $agentConfig = @"
@@ -157,12 +198,16 @@ exit_after_auth = true
 vault {
   address = "$VaultAddr"
 $namespaceLine
+$caCertLine
 }
 
 auto_auth {
-  method "token_file" {
+  method "cert" {
+    mount_path = "$VaultAuthPath"
     config = {
-      token_file_path = "$tokenFileAgent"
+      name = "$VaultAuthCertName"
+      client_cert = "$vaultClientCertAgent"
+      client_key = "$vaultClientKeyAgent"
     }
   }
 
@@ -187,10 +232,44 @@ template {
 Write-Utf8File -Path $configFile -Content $agentConfig
 
 try {
-  & $vaultAgentExe agent "-config=$configFile"
+  $vaultAgentProcess = Start-Process `
+    -FilePath $vaultAgentExe `
+    -ArgumentList @("agent", "-config=$configFile") `
+    -RedirectStandardOutput $vaultAgentStdoutFile `
+    -RedirectStandardError $vaultAgentStderrFile `
+    -PassThru `
+    -NoNewWindow
 
-  if ($LASTEXITCODE -ne 0) {
-    throw "Vault Agent exited with code $LASTEXITCODE"
+  if (-not $vaultAgentProcess.WaitForExit($VaultAgentTimeoutSeconds * 1000)) {
+    Stop-Process -Id $vaultAgentProcess.Id -Force -ErrorAction SilentlyContinue
+
+    $stdout = ""
+    $stderr = ""
+
+    if (Test-Path -LiteralPath $vaultAgentStdoutFile) {
+      $stdout = Get-Content -LiteralPath $vaultAgentStdoutFile -Raw
+    }
+
+    if (Test-Path -LiteralPath $vaultAgentStderrFile) {
+      $stderr = Get-Content -LiteralPath $vaultAgentStderrFile -Raw
+    }
+
+    throw "Vault Agent timed out after $VaultAgentTimeoutSeconds seconds.`nstdout:`n$stdout`nstderr:`n$stderr"
+  }
+
+  if ($vaultAgentProcess.ExitCode -ne 0) {
+    $stdout = ""
+    $stderr = ""
+
+    if (Test-Path -LiteralPath $vaultAgentStdoutFile) {
+      $stdout = Get-Content -LiteralPath $vaultAgentStdoutFile -Raw
+    }
+
+    if (Test-Path -LiteralPath $vaultAgentStderrFile) {
+      $stderr = Get-Content -LiteralPath $vaultAgentStderrFile -Raw
+    }
+
+    throw "Vault Agent exited with code $($vaultAgentProcess.ExitCode).`nstdout:`n$stdout`nstderr:`n$stderr"
   }
 
   Assert-FileExists -Path $certPath
