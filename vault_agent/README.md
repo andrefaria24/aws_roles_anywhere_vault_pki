@@ -11,8 +11,6 @@ This directory contains two examples that both:
 
 - `powershell/ListS3BucketsWithVaultAgent.ps1`: PowerShell version
 - `python/list_s3_buckets_with_vault_agent.py`: Python version
-- `python/certificate_auth_flow.md`: Mermaid flow diagram for the Python certificate-auth workflow
-- `python/certificate_auth_flow.png`: Rendered PNG version of the Python certificate-auth workflow
 - `python/requirements.txt`: Python dependencies
 
 ## Shared Prerequisites
